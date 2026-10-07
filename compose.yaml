@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16
+    container_name: goldmine-postgres
+    environment:
+      POSTGRES_USER: goldmine
+      POSTGRES_PASSWORD: goldmine
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goldmine"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

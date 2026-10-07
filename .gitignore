@@ -1,0 +1,30 @@
+# Private training instructions
+claude.md
+plan.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+
+# dbt
+goldmine_dbt/target/
+goldmine_dbt/dbt_packages/
+goldmine_dbt/logs/
+goldmine_dbt/.user.yml
+
+# Logs
+logs/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# macOS and editors
+.DS_Store
+.idea/

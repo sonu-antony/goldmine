@@ -1,0 +1,12 @@
+goldmine_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: localhost
+      port: 5433
+      user: goldmine
+      password: goldmine
+      dbname: warehouse
+      schema: public
+      threads: 4
