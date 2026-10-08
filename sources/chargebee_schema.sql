@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS chargebee.subscription (
             'active',
             'cancelled',
             'non_renewing',
+            'paused',
             'in_trial',
             'future'
         )
@@ -47,6 +48,28 @@ CREATE TABLE IF NOT EXISTS chargebee.invoice (
         status IN (
             'paid',
             'payment_due',
+            'voided'
+        )
+    ),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT fk_subscription FOREIGN KEY (subscription_id) REFERENCES chargebee.subscription (id)
+);
+-- A credit note is money given back against a subscription: a downgrade credit or a refund.
+CREATE TABLE IF NOT EXISTS chargebee.credit_note (
+    id BIGINT PRIMARY KEY,
+    subscription_id BIGINT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    reason TEXT NOT NULL CHECK (
+        reason IN (
+            'order_change',
+            'service_unsatisfactory'
+        )
+    ),
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'adjusted',
+            'refunded',
             'voided'
         )
     ),
