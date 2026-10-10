@@ -76,3 +76,60 @@ One entry per concept, added when it is taught.
 - Limits: it only sees the state at the time it ran (two changes between runs show only the final one), and it has no history before its first run.
 - Snapshots compared with the events log: snapshot is simple and good going forward. Events are complete and can rebuild older history, but are messy to model.
 - Ingestion here is Airbyte or custom Python, orchestration is Dagster. Never Airflow in this story.
+
+## Layers and the raw layer
+- Raw: data exactly as it arrived from the source, no cleaning, no business logic. Staging: clean each source's quirks once. Intermediate: combine cleaned sources. Gold: shaped for one consumer.
+- Why layers: when something breaks you know which layer to look at, and raw lets you rebuild everything downstream without calling the source again.
+- Raw tables have no primary key or foreign key constraints: they must accept whatever arrives, including duplicates. (Redshift does not enforce them anyway, they are informational only.)
+- Real tools add load metadata: Airbyte adds `_airbyte_raw_id`, `_airbyte_extracted_at`, `_airbyte_meta`. We add `_loaded_at`.
+
+## Full load compared with incremental load
+- Full load: replace the whole raw table from the source every run. Simple, always correct, cost grows with table size.
+- Incremental load: pull only rows with `updated_at` after the last cursor value. Fast, but a wrong cursor loses or duplicates rows.
+- Redshift: bulk loads use `COPY` from S3, never row-by-row inserts. Row inserts are very slow on a columnar warehouse.
+
+## Staging, intermediate and gold in detail
+- Three jobs in my old adapter, now separate layers: clean each source's quirks (staging), combine cleaned sources into a business concept (intermediate), shape for one consumer (gold).
+- Staging: one model per source table. Rename to one convention, cast types (for example Unix timestamp to timestamp), fix technical problems like repeated rows. No joins, no business logic. A changed source column is fixed in one place.
+- Intermediate: joins and business logic across cleaned sources (for example one row per customer with subscription and plan joined in). State the grain in one sentence. Not for dashboards.
+- Gold: shaped for one consumer and holds the agreed metric definitions (`dim_customers`, monthly MRR). What dashboards and analysts read.
+- Debugging walks backwards: gold logic, intermediate join, staging cleaning, or bad data already in raw.
+
+## Incremental load and the cursor
+- Like my HubSpot sync: store when I last synced, ask for rows modified since. The marker is the cursor (high-water mark), here `updated_at`.
+- Cursor can be read from the target: `max(updated_at)` in the raw table. Empty or missing raw table means never loaded, so do a full load.
+- Pull `WHERE updated_at >= cursor`. Use `>=` not `>`: rows can share the cursor timestamp or commit late in the source. Re-reading the boundary is harmless because the batch replaces rows by `id`.
+- Changed rows come back with the same `id` and a newer `updated_at`. Pattern: load the batch into a temporary table, delete matching `id` values from raw, insert the batch, one transaction. Result: one row per `id`, and re-running a window changes nothing (idempotent).
+- Limit: a cursor cannot see hard-deleted source rows. Fix with soft deletes or periodic full reloads.
+- Redshift: no `INSERT ... ON CONFLICT`. `MERGE` exists now, but delete plus insert in one transaction is the classic pattern. Deleted rows stay on disk until `VACUUM DELETE` (automatic vacuum does it in the background). PostgreSQL uses autovacuum.
+
+## Lookback window
+- Problem: a row can be written with an older `updated_at` than my cursor (a transaction that began earlier and committed later). A plain cursor has already moved past it and never sees it.
+- Fix: on every run re-read some time before the cursor (`--lookback-minutes`, default 60). Safe because the batch replaces rows by `id`, so the overlap changes nothing (idempotent).
+- Trade-off: a bigger window catches later commits but re-reads more rows each run.
+- A lookback does not help when a source changes a row without moving `updated_at`. That needs reconciliation (compare counts or checksums between source and raw) or a periodic full refresh.
+
+## The incremental load on real Redshift
+- Same logic as my loader (cursor, batch, replace by `id`, one transaction). Different plumbing.
+- Getting data in: extract changed rows to a file (Parquet or compressed CSV), upload to S3, run Redshift `COPY` from S3 with an IAM role. Loads in parallel across slices, so split into several files. Airbyte's Redshift destination stages through S3 the same way.
+- Incremental step: `COPY` the batch into a temporary table, then in one transaction `MERGE` (added in 2023) or `DELETE` matching `id` plus `INSERT`. Commit.
+- No enforced primary or unique keys, so a failed delete step silently leaves duplicates. dbt `unique` tests catch it.
+- `TRUNCATE` commits immediately and cannot be rolled back. For a safe full refresh, load a new table and rename it into place, or use `DELETE`.
+- `TEXT` becomes `VARCHAR(256)`. Choose string lengths on purpose.
+- No binary `COPY`. Formats are CSV, JSON, Parquet, Avro and similar.
+- Deleted rows stay on disk until vacuum. Automatic vacuum and automatic analyze run in the background.
+- What my build simplifies: it streams between two PostgreSQL databases with binary `COPY` and builds raw tables from `information_schema`.
+
+## What Airbyte does for you (compared with my hand-written loader)
+- Ready-made, maintained connectors (Chargebee, HubSpot, Pipedrive, Intercom, Amplitude, PostgreSQL): authentication, pagination, rate limits handled.
+- Schema discovery (like my `information_schema` step), its own saved state (my cursor), sync modes per table: full refresh overwrite or append, incremental append, incremental append plus deduplicated (my delete-then-insert by `id`).
+- Redshift destination stages files in S3 and runs `COPY`. Adds `_airbyte_extracted_at` and similar metadata columns (my `_loaded_at`).
+- It removes plumbing, not problems: cursor syncs still miss rows that change without a new `updated_at` (PostgreSQL has a change-data-capture mode), it does no cleaning or metrics (that is dbt), and it is another system to run and monitor.
+- Rule: Airbyte when a maintained connector covers the source and the data needed. Custom Python when there is no connector, it misses an endpoint or field, or the logic is unusual.
+
+## dbt sources, freshness and staging models
+- A source declares "this table exists and someone else loads it" in a `sources` YAML file. Models then read it with `{{ source('name', 'table') }}` instead of a hard-coded table name. It gives lineage and lets dbt check freshness.
+- Source freshness: tell dbt which column holds the load time (`_loaded_at`) and thresholds (`warn_after`, `error_after`). `dbt source freshness` fails if the newest row is too old. A health check on the loader.
+- Staging model naming convention: `stg_<source>__<table>` (double underscore), one model per source table, in a staging folder. No joins, no business logic.
+- Layers build into their own schemas (`staging`, `intermediate`, `gold`). In this project a macro, `generate_schema_name`, makes dbt use the schema name exactly.
+- Redshift: a view depends on the tables it reads and blocks dropping them. dbt-redshift can create late-binding views (`bind: false`) to avoid that.
