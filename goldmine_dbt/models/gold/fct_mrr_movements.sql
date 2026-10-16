@@ -53,7 +53,7 @@ select
     case when movement_type = 'contraction' then previous_mrr_cents - mrr_cents else 0 end as contraction_mrr_cents,
     case when movement_type = 'churned' then previous_mrr_cents else 0 end as churned_mrr_cents,
     case when movement_type = 'reactivated' then mrr_cents else 0 end as reactivated_mrr_cents,
-    case when movement_type = 'paused' then previous_mrr_cents else 0 end as paused_mrr_cents,
+    case when movement_type = 'paused' then 0 else 0 end as paused_mrr_cents,
     case when movement_type = 'resumed' then mrr_cents else 0 end as resumed_mrr_cents
 from classified
 where movement_type != 'inactive'
