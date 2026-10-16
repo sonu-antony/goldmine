@@ -60,6 +60,26 @@ def ensure_raw_table(war_cur, dst, columns):
     )
 
 
+def sync_columns(war_cur, dst, dst_schema, dst_table, columns):
+    """Schema drift: a column that appeared in the source is added to raw. Never drops anything."""
+    war_cur.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s",
+        (dst_schema, dst_table),
+    )
+    existing = {row[0] for row in war_cur.fetchall()}
+    for name, data_type, max_len in columns:
+        if name not in existing:
+            war_cur.execute(
+                sql.SQL("ALTER TABLE {} ADD COLUMN {} {}").format(
+                    dst, sql.Identifier(name), sql.SQL(column_type(data_type, max_len))
+                )
+            )
+            print(f"  schema drift: added column {name} to {dst_schema}.{dst_table}")
+    source_names = {c[0] for c in columns}
+    for name in sorted(existing - source_names - {"_loaded_at"}):
+        print(f"  schema drift: column {name} is no longer in the source, raw keeps it (now null for new rows)")
+
+
 def stream(src_cur, war_cur, select_sql, params, target, column_list):
     """Stream rows from a source query into a warehouse table with two COPY statements."""
     copy_out = sql.SQL("COPY ({}) TO STDOUT WITH BINARY").format(select_sql)
@@ -84,6 +104,7 @@ def load(src_conn, war_conn, source, target, full_refresh, lookback_minutes, sta
 
     with src_conn.cursor() as src_cur, war_conn.cursor() as war_cur:
         ensure_raw_table(war_cur, dst, columns)
+        sync_columns(war_cur, dst, dst_schema, dst_table, columns)
         war_cur.execute(sql.SQL("SELECT max(updated_at) FROM {}").format(dst))
         cursor_value = war_cur.fetchone()[0]
 

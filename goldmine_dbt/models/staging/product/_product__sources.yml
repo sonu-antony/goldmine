@@ -7,7 +7,28 @@ sources:
     tables:
       - name: product_workspaces
         description: One row per customer account.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: product_users
         description: One row per person inside a workspace.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: product_messages
         description: One row per message sent or received. The largest table, loaded incrementally.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn

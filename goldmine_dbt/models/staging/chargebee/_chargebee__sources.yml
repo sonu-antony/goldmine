@@ -7,13 +7,55 @@ sources:
     tables:
       - name: chargebee_customer
         description: One row per paying customer, as it arrived.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: chargebee_plan
         description: The price list. One row per plan.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: chargebee_subscription
         description: Current state of each subscription. Overwritten in place on every change.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: chargebee_subscription_event
         description: Chargebee events log. Every change to a subscription, with the state after the change.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: chargebee_invoice
         description: One row per bill.
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
       - name: chargebee_credit_note
         description: Money given back against a subscription (downgrade credit or refund).
+        columns:
+          - name: id
+            description: Source identifier. Repeats mean a load was retried or overlapped.
+            data_tests:
+              - unique:
+                  config:
+                    severity: warn
