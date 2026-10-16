@@ -1,0 +1,3 @@
+vpc_id              = "vpc-0123456789abcdef0"
+subnet_ids          = ["subnet-aaaa1111", "subnet-bbbb2222"]
+allowed_cidr_blocks = ["10.0.0.0/16"]

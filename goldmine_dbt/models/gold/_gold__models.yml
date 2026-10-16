@@ -98,3 +98,16 @@ models:
     columns:
       - name: workspace_id
         data_tests: [unique, not_null]
+
+  - name: hubspot_company_health
+    description: >
+      Grain: one row per HubSpot company linked to a paying customer. Read by Hightouch and written back
+      into HubSpot as company properties. The key must be unique, or the sync would update one company twice.
+    columns:
+      - name: hubspot_company_id
+        data_tests: [unique, not_null]
+      - name: goldmine_subscription_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [future, in_trial, active, non_renewing, paused, cancelled]
