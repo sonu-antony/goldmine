@@ -34,7 +34,7 @@ PostgreSQL 16 plays both the sources (`app_db`) and the warehouse (`warehouse`, 
 | Dashboard | Metabase, set up by script, with a SaaS metrics dashboard on the gold tables. `scripts/metabase_setup.py` |
 | Redshift | Terraform for the cluster, S3 staging, IAM and cost limits; access roles; table design; load and maintenance SQL. `terraform/`, `redshift/` |
 | Reverse ETL | A tested dbt model for Hightouch and the sync design. `hightouch/`, `docs/hightouch.md` |
-| Failure drills | Seven staged failures, run for real, with the symptom, root cause and fix recorded. `INCIDENTS.md`, `sources/simulate_changes.py` |
+| Failure drills | Eight staged failures, run for real, with the symptom, root cause and fix recorded, including a pull request that CI blocked. `INCIDENTS.md`, `sources/simulate_changes.py` |
 | Runbook | What to do for each kind of failure. `docs/runbook.md` |
 
 ## What was actually run, and what was not
@@ -45,7 +45,7 @@ PostgreSQL 16 plays both the sources (`app_db`) and the warehouse (`warehouse`, 
 | All dbt models, tests, snapshot, docs | Terraform apply (it passes `tofu validate` and `tofu fmt`, but there is no AWS account) |
 | Dagster jobs, checks and the failure alert, end to end | The Hightouch sync (needs a hosted account; the model it reads is built and tested) |
 | Metabase setup and every dashboard query | The `redshift` dbt target |
-| The CI steps, on small data, against throwaway databases | The GitHub Actions run itself, until it runs on GitHub |
+| The CI workflow on GitHub: green on `main`, and a pull request with a broken MRR bridge was blocked | |
 
 Current result of `dbt build` on the full local dataset: **138 passed, 10 warnings, 0 errors**. The 10 warnings are known source defects, each with the reason written next to the test.
 
