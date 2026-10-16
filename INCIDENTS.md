@@ -56,3 +56,10 @@ How I noticed: `dbt source freshness` reported `ERROR STALE` for `load_log_produ
 Root cause: Nothing wrote to the table for longer than the limit. Because freshness reads the loader's own log, a quiet table that the loader keeps visiting does not trigger a false alarm.
 Fix: Ran the loader again. It wrote a new log row and the check passed.
 What I would say in an interview: I check freshness on the loader's run log, with a limit per table sized to how often it changes. The busy table has a tight limit and the price list a loose one.
+
+## 2026-10-16 A pull request broke the MRR bridge and CI blocked it
+What broke: A pull request changed `fct_mrr_movements` so paused revenue was no longer recorded as a movement ("stop counting paused MRR"). It looked reasonable in review: pauses are not churn, so why show them? The monthly bridge `closing = opening + movements` then no longer added up.
+How I noticed: GitHub Actions failed the `dbt build` job on the pull request: `FAIL 3 assert_mrr_bridge_balances`, `Got 3 results, configured to fail if != 0`. The Python tests job passed. The pull request could not merge.
+Root cause: A paused customer's revenue leaves MRR, so it must appear as a movement or the bridge has a hole. Pause is a separate movement type from churn, not a missing one. The change fixed a misunderstanding in one place and broke the invariant everywhere else.
+Fix: Closed the pull request without merging. The bridge test stays at error severity, not warn, because it protects the definition itself.
+What I would say in an interview: CI runs the full dbt build against a database on every pull request, so a change that breaks an invariant, not only a syntax error, is stopped before it merges. I keep the checks that protect metric definitions at error level, and warn only for known source defects.
