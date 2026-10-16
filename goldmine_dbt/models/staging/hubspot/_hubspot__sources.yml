@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: hubspot
+    description: HubSpot CRM data, loaded into the raw schema.
+    schema: raw
+    tables:
+      - name: hubspot_companies
+        description: One row per company the sales team tracks.
+      - name: hubspot_deals
+        description: One row per sales opportunity.

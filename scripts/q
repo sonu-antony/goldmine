@@ -1,0 +1,5 @@
+#!/bin/sh
+# Run one SQL statement. Usage: scripts/q "select 1"            (warehouse)
+#                            scripts/q app_db "select 1"        (sources)
+if [ "$#" -ge 2 ]; then DB="$1"; SQL="$2"; else DB="warehouse"; SQL="$1"; fi
+podman exec goldmine-postgres psql -U goldmine -d "$DB" -c "$SQL"

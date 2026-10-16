@@ -133,3 +133,37 @@ One entry per concept, added when it is taught.
 - Staging model naming convention: `stg_<source>__<table>` (double underscore), one model per source table, in a staging folder. No joins, no business logic.
 - Layers build into their own schemas (`staging`, `intermediate`, `gold`). In this project a macro, `generate_schema_name`, makes dbt use the schema name exactly.
 - Redshift: a view depends on the tables it reads and blocks dropping them. dbt-redshift can create late-binding views (`bind: false`) to avoid that.
+
+## View compared with table (materialization)
+- A table stores rows on disk. A view stores only a query: selecting from it re-runs the saved `select` against the real table each time. Like a getter method compared with a stored field.
+- A view is always current and costs no storage, but its query re-runs on every read. A table pays the cost once when built, then reads are fast.
+- In dbt this choice is the materialization. Here: views for staging and intermediate, tables for gold (set in `dbt_project.yml`).
+
+## Freshness in plain words
+- Without a check, a stopped loader changes nothing visibly: raw just stops getting new rows and dashboards quietly show old numbers.
+- `dbt source freshness` looks at the newest `_loaded_at` in a raw table and compares it with `warn_after` and `error_after`. It checks how long ago the loader last wrote, not whether the data is correct.
+
+## Freshness on a load log, and how Airbyte handles it
+- Freshness on the data column (`_loaded_at`) false-alarms on quiet tables. Fix: the loader writes one row per table per run into `raw._load_log` in the same transaction as the data. dbt reads it as a source with `loaded_at_field: finished_at` and a `filter` so each check covers one table. Limits then follow the loader schedule, not how often the data changes.
+- `filter` is SQL text added as a `where` clause to dbt's freshness query. Placed under `freshness:`.
+- Airbyte equivalent: it records every sync as a job (start, end, success or failure, records moved), visible in its interface and API, with failure notifications (Slack, email). Records carry `_airbyte_extracted_at` (same quiet-table trap as `_loaded_at`). The Dagster Airbyte integration runs syncs as assets and tracks whether they worked.
+- Rule: run history answers "did the sync run?", per-table limits answer "is silence suspicious?". Notification options differ between Airbyte Cloud and self-hosted, so check the real version.
+
+## How Airbyte and dbt connect
+- dbt does not read Airbyte's job history. They are separate systems and neither knows the other.
+- Three ways: (1) dbt freshness on `_airbyte_extracted_at` in the raw table, a safety net with the quiet-table trap. (2) A small job copies Airbyte's sync results (from its API) into a warehouse table that dbt reads as a source, like my `_load_log`. (3) The usual answer: Dagster triggers the Airbyte sync, waits, and runs dbt only if the sync succeeded. Dagster raises the alert on failure or lateness.
+- dbt freshness stays as a second line of defence for the case where a sync succeeds but pulls nothing. Dagster setup is Session 10.
+
+## dbt tests (generic tests)
+- A test is a query that returns the rows that break a rule. No rows returned means pass. Any row means fail, and dbt reports how many.
+- You name the rule in YAML under the model's column (key `data_tests`); dbt writes the query. Run with `dbt test`.
+- `unique`: no value appears twice. `not_null`: no empty values. `relationships`: every value exists in another model's column (`to: ref(...)`, `field: ...`). `accepted_values`: only the listed values.
+- Model YAML also holds `description:` for the model and each column, which feeds `dbt docs generate`.
+- Profiling by hand finds a problem once. A test finds it every run.
+
+## Two kinds of duplicates, and what staging does about messy sources
+- Technical duplicate: the same row with the same `id` arrived twice (loader or sync overlap). Staging fixes it: keep the latest copy of each `id`. No business judgement.
+- Business duplicate: two different ids for the same real-world entity (found: 4 workspaces with two Chargebee customers, one empty copy). Staging does not delete silently: choosing the survivor is a business decision, the best rule needs a join to subscriptions (not allowed in staging), and deleting hides the problem from the source owner.
+- What to do instead: staging keeps all rows. A `unique` test makes it visible (choose `warn` or `error`). The intermediate layer applies the agreed rule. Tell the source owner so it is fixed at the source.
+- Nulls where a link should exist (found: 9 customers without `workspace_id`): staging does not invent values. It keeps the null, a `not_null` test with `warn` reports the count, and downstream models decide (left join keeps them for revenue, active-workspace metric ignores them).
+- Staging is a faithful, cleaned copy of the source that makes problems visible.

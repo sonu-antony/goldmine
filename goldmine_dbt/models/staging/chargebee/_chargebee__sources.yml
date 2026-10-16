@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: chargebee
+    description: Billing data loaded from Chargebee into the raw schema. Freshness is checked on the load log (see load_log).
+    schema: raw
+    tables:
+      - name: chargebee_customer
+        description: One row per paying customer, as it arrived.
+      - name: chargebee_plan
+        description: The price list. One row per plan.
+      - name: chargebee_subscription
+        description: Current state of each subscription. Overwritten in place on every change.
+      - name: chargebee_subscription_event
+        description: Chargebee events log. Every change to a subscription, with the state after the change.
+      - name: chargebee_invoice
+        description: One row per bill.
+      - name: chargebee_credit_note
+        description: Money given back against a subscription (downgrade credit or refund).

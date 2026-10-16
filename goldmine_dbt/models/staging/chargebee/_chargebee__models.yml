@@ -1,0 +1,158 @@
+version: 2
+
+models:
+  - name: stg_chargebee__customer
+    description: >
+      Chargebee customers, cleaned. One row per customer record. Known source problems are kept
+      visible on purpose: a workspace can have two customer records, and some customers have no
+      workspace. Staging does not choose a survivor, the intermediate layer does.
+    columns:
+      - name: customer_id
+        description: Chargebee customer identifier.
+        data_tests: [unique, not_null]
+      - name: customer_name
+        data_tests: [not_null]
+      - name: workspace_id
+        description: Product workspace this customer pays for. A plain value, not a foreign key.
+        data_tests:
+          # Source problem: the same customer was entered twice for some workspaces.
+          - unique:
+              config:
+                severity: warn
+          # Source problem: some customers were created without being linked to a workspace.
+          - not_null:
+              config:
+                severity: warn
+          # Source problem: some customers point at a workspace that does not exist.
+          - relationships:
+              arguments:
+                to: ref('stg_product__workspaces')
+                field: workspace_id
+              config:
+                severity: warn
+      - name: updated_at
+        data_tests: [not_null]
+
+  - name: stg_chargebee__plan
+    description: The price list. One row per plan.
+    columns:
+      - name: plan_id
+        data_tests: [unique, not_null]
+      - name: plan_name
+        data_tests: [not_null]
+      - name: monthly_price_cents
+        description: Current list price in cents. Subscriptions keep the price they signed at.
+        data_tests: [not_null]
+
+  - name: stg_chargebee__subscription
+    description: >
+      Current state of each subscription. The source overwrites this row on every change, so history
+      lives in the events model and in the subscription snapshot.
+    columns:
+      - name: subscription_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_chargebee__customer')
+                field: customer_id
+      - name: plan_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_chargebee__plan')
+                field: plan_id
+      - name: subscription_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [future, in_trial, active, non_renewing, paused, cancelled]
+      - name: plan_amount_cents
+        description: Price per seat in cents that this subscription signed at.
+        data_tests: [not_null]
+      - name: quantity
+        description: Number of seats.
+        data_tests: [not_null]
+      - name: cancelled_on
+        description: >
+          Date the subscription was cancelled, or for non_renewing the date it will end.
+          Source problem: some cancelled subscriptions have no date, see the singular test.
+
+  - name: stg_chargebee__subscription_event
+    description: Chargebee events log. One row per change to a subscription, with the state after the change.
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: subscription_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_chargebee__subscription')
+                field: subscription_id
+      - name: event_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - subscription_created
+                  - subscription_activated
+                  - subscription_changed
+                  - subscription_paused
+                  - subscription_resumed
+                  - subscription_cancellation_scheduled
+                  - subscription_cancelled
+                  - subscription_reactivated
+      - name: occurred_at
+        data_tests: [not_null]
+
+  - name: stg_chargebee__invoice
+    description: One row per bill. Includes prorated bills raised by mid-term upgrades.
+    columns:
+      - name: invoice_id
+        data_tests: [unique, not_null]
+      - name: subscription_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_chargebee__subscription')
+                field: subscription_id
+      - name: invoice_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [paid, payment_due, voided]
+      - name: amount_cents
+        data_tests: [not_null]
+    data_tests:
+      # Source problem: a few invoices claim to be updated before they were created.
+      - updated_at_not_before_created_at:
+          config:
+            severity: warn
+
+  - name: stg_chargebee__credit_note
+    description: Money given back against a subscription. A downgrade usually produces a credit note, not an invoice.
+    columns:
+      - name: credit_note_id
+        data_tests: [unique, not_null]
+      - name: subscription_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_chargebee__subscription')
+                field: subscription_id
+      - name: reason
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [order_change, service_unsatisfactory]
+      - name: credit_note_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [adjusted, refunded, voided]

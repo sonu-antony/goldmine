@@ -1,0 +1,6 @@
+## 2026-10-10 Stalled loader showed up as a stale source (and a false alarm trap)
+What broke: Simulated a stalled loader by tightening the freshness limits to 1 hour (warn) and 3 hours (error) on `raw.chargebee_plan`, whose newest `_loaded_at` was about 3 hours 39 minutes old.
+How I noticed: `dbt source freshness` returned an error saying the source was stale.
+Root cause: Nothing had written to the table for longer than the error limit. Also found the check is unreliable for quiet tables: with an incremental loader, `_loaded_at` only changes on rows that were pulled, so a healthy loader on a table with no source changes would also look stale.
+Fix: Ran the loader again, which wrote new rows and made the source fresh, then put the limits back to 12 and 24 hours. To remove the false alarm, the loader now writes one row per table per run into `raw._load_log` in the same transaction as the data, so freshness can be measured on when the loader last finished and not on when data last changed.
+What I would say in an interview: I check freshness on the loader's own run log, not only on the data timestamps, and set limits per table based on how often it changes, so a stalled sync is caught and a quiet table does not raise a false alarm.

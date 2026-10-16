@@ -1,12 +1,25 @@
+# Connection settings. Defaults point at the local container; CI and other environments override
+# them with environment variables. The redshift output is the production shape (needs dbt-redshift).
 goldmine_dbt:
-  target: dev
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
     dev:
       type: postgres
-      host: localhost
-      port: 5433
-      user: goldmine
-      password: goldmine
+      host: "{{ env_var('WAREHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('WAREHOUSE_PORT', '5433') | as_number }}"
+      user: "{{ env_var('WAREHOUSE_USER', 'goldmine') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD', 'goldmine') }}"
       dbname: warehouse
       schema: public
       threads: 4
+    redshift:
+      type: redshift
+      host: "{{ env_var('REDSHIFT_HOST', 'example.redshift.amazonaws.com') }}"
+      port: 5439
+      user: "{{ env_var('REDSHIFT_USER', 'dbt_transformer') }}"
+      password: "{{ env_var('REDSHIFT_PASSWORD', '') }}"
+      dbname: warehouse
+      schema: public
+      threads: 4
+      sslmode: require
+      ra3_node: true

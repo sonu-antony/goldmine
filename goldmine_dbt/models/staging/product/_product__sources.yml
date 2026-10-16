@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: product
+    description: The product database, loaded into the raw schema.
+    schema: raw
+    tables:
+      - name: product_workspaces
+        description: One row per customer account.
+      - name: product_users
+        description: One row per person inside a workspace.
+      - name: product_messages
+        description: One row per message sent or received. The largest table, loaded incrementally.

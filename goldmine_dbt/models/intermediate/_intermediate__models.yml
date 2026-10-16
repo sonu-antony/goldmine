@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: int_months
+    description: "Grain: one row per calendar month, from the first subscription to the current month."
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
+
+  - name: int_customers__resolved
+    description: >
+      Grain: one row per real-world customer. Resolves duplicate customer records for the same
+      workspace by keeping the one that has subscriptions, then the oldest.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: workspace_id
+        description: Empty for customers that were never linked to a workspace.
+        data_tests:
+          - unique
+      - name: duplicate_records_discarded
+        description: How many extra customer records for the same workspace were dropped.
+
+  - name: int_workspaces
+    description: "Grain: one row per workspace. Flags internal test accounts and counts users."
+    columns:
+      - name: workspace_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: The resolved billing customer, if any. Free workspaces have none.
+
+  - name: int_subscriptions__enriched
+    description: >
+      Grain: one row per subscription, with plan name, resolved customer and current MRR. A
+      subscription counts as revenue while it is active or non_renewing.
+    columns:
+      - name: subscription_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_customers__resolved')
+                field: customer_id
+
+  - name: int_subscription_state_monthly
+    description: >
+      Grain: one row per subscription per month. State at the end of each month, rebuilt from the
+      events log.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            columns: [subscription_id, month_start]
+    columns:
+      - name: subscription_status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [future, in_trial, active, non_renewing, paused, cancelled]

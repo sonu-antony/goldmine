@@ -1,0 +1,77 @@
+version: 2
+
+# Freshness is measured on the loader's own run log, not on the data. A quiet table (nothing changed
+# in the source) would otherwise look stale even though the loader ran fine. The loader writes one
+# row per table per run into raw._load_log, in the same transaction as the data.
+sources:
+  - name: load_log
+    description: One row per table per loader run. Used for source freshness checks.
+    schema: raw
+    loaded_at_field: finished_at
+    tables:
+      - name: load_log_chargebee_customer
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_customer'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_chargebee_plan
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_plan'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_chargebee_subscription
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_subscription'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_chargebee_subscription_event
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_subscription_event'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_chargebee_invoice
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_invoice'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_chargebee_credit_note
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'chargebee_credit_note'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_product_workspaces
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'product_workspaces'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_product_users
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'product_users'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_product_messages
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'product_messages'"
+          warn_after: { count: 2, period: hour }
+          error_after: { count: 6, period: hour }
+      - name: load_log_hubspot_companies
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'hubspot_companies'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }
+      - name: load_log_hubspot_deals
+        identifier: _load_log
+        freshness:
+          filter: "table_name = 'hubspot_deals'"
+          warn_after: { count: 12, period: hour }
+          error_after: { count: 24, period: hour }

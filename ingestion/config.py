@@ -15,6 +15,7 @@ TABLES = {
     "chargebee.subscription": "raw.chargebee_subscription",
     "chargebee.invoice": "raw.chargebee_invoice",
     "chargebee.credit_note": "raw.chargebee_credit_note",
+    "chargebee.subscription_event": "raw.chargebee_subscription_event",
     "hubspot.companies": "raw.hubspot_companies",
     "hubspot.deals": "raw.hubspot_deals",
 }

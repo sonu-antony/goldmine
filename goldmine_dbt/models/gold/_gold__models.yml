@@ -1,0 +1,100 @@
+version: 2
+
+models:
+  - name: fct_mrr_monthly
+    description: >
+      Grain: one row per customer per month. Monthly recurring revenue in cents at the end of the
+      month, rebuilt from the Chargebee events log. Test accounts are excluded.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            columns: [customer_id, month_start]
+    columns:
+      - name: customer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: mrr_cents
+        data_tests: [not_null]
+      - name: status_in_month
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [active, paused, trial, cancelled]
+
+  - name: fct_mrr_movements
+    description: >
+      Grain: one row per customer per month with revenue now or last month. Explains how MRR changed:
+      new, expansion, contraction, churned, paused, resumed, reactivated or unchanged. A pause is not churn.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            columns: [customer_id, month_start]
+    columns:
+      - name: movement_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [new, expansion, contraction, churned, paused, resumed, reactivated, unchanged]
+
+  - name: fct_saas_metrics_monthly
+    description: >
+      Grain: one row per month. Opening and closing MRR, the movements between them, logo churn,
+      gross revenue churn, net and gross revenue retention. The single definition used by dashboards.
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
+      - name: closing_mrr_cents
+        data_tests: [not_null]
+
+  - name: fct_workspace_activity_daily
+    description: >
+      Grain: one row per workspace per active day. Incremental, with a lookback on message arrival
+      time so late-arriving messages correct the day they belong to.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            columns: [workspace_id, activity_date]
+    columns:
+      - name: workspace_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product__workspaces')
+                field: workspace_id
+      - name: messages_sent
+        data_tests: [not_null]
+
+  - name: fct_active_workspaces_monthly
+    description: >
+      Grain: one row per month. A workspace is active in a month if it sent at least the configured
+      number of outbound messages (variable active_workspace_min_outbound_messages). Internal accounts
+      are excluded. The current month is month to date.
+    columns:
+      - name: month_start
+        data_tests: [unique, not_null]
+      - name: active_workspaces
+        data_tests: [not_null]
+
+  - name: dim_customers
+    description: >
+      Grain: one row per resolved customer. Current plan, status and MRR, the workspace, and the
+      HubSpot company. Flags customers with no workspace link or a broken one.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: current_status
+        description: Status of the customer's subscription. Empty only if the customer never subscribed.
+
+  - name: dim_workspaces
+    description: >
+      Grain: one row per workspace. Billing state and recent activity. is_active_last_28_days uses
+      the same message threshold as the monthly active workspace metric.
+    columns:
+      - name: workspace_id
+        data_tests: [unique, not_null]

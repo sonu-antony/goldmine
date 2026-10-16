@@ -77,3 +77,29 @@ CREATE TABLE IF NOT EXISTS chargebee.credit_note (
     updated_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT fk_subscription FOREIGN KEY (subscription_id) REFERENCES chargebee.subscription (id)
 );
+
+-- Chargebee keeps an events log: every change to a subscription, with the state after the change.
+CREATE TABLE IF NOT EXISTS chargebee.subscription_event (
+    id BIGINT PRIMARY KEY,
+    subscription_id BIGINT NOT NULL,
+    event_type TEXT NOT NULL CHECK (
+        event_type IN (
+            'subscription_created',
+            'subscription_activated',
+            'subscription_changed',
+            'subscription_paused',
+            'subscription_resumed',
+            'subscription_cancellation_scheduled',
+            'subscription_cancelled',
+            'subscription_reactivated'
+        )
+    ),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    plan_id BIGINT NOT NULL,
+    plan_amount_cents INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT fk_subscription FOREIGN KEY (subscription_id) REFERENCES chargebee.subscription (id)
+);

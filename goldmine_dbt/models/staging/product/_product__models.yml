@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: stg_product__workspaces
+    description: One row per customer account in the product.
+    columns:
+      - name: workspace_id
+        data_tests: [unique, not_null]
+      - name: workspace_name
+        data_tests: [not_null]
+
+  - name: stg_product__users
+    description: >
+      One row per person inside one workspace. The same email can appear in several workspaces
+      (agencies and consultants), so email is not unique.
+    columns:
+      - name: user_id
+        data_tests: [unique, not_null]
+      - name: workspace_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product__workspaces')
+                field: workspace_id
+      - name: email
+        description: Trimmed and lower-cased. The source stores whatever the person typed.
+        data_tests: [not_null]
+      - name: user_role
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [owner, admin, agent]
+
+  - name: stg_product__messages
+    description: One row per message sent or received. The largest table.
+    columns:
+      - name: message_id
+        data_tests: [unique, not_null]
+      - name: workspace_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product__workspaces')
+                field: workspace_id
+      - name: user_id
+        description: The agent who sent it. Empty for inbound messages, where a customer wrote in.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_product__users')
+                field: user_id
+      - name: channel
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [whatsapp, instagram, facebook, telegram, sms, email]
+      - name: direction
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [inbound, outbound]
+      - name: sent_at
+        data_tests: [not_null]

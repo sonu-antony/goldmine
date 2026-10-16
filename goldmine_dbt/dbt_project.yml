@@ -23,6 +23,12 @@ clean-targets:         # directories to be removed by `dbt clean`
   - "dbt_packages"
 
 
+vars:
+  # An active workspace sent at least this many messages (outbound) in the calendar month.
+  active_workspace_min_outbound_messages: 10
+  # Incremental models re-read this many days of arrivals to catch late data.
+  activity_lookback_days: 3
+
 # One folder per layer, each built into its own schema in the warehouse.
 models:
   goldmine_dbt:
