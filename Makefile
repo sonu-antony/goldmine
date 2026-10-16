@@ -34,7 +34,7 @@ freshness:     ## dbt source freshness (reads raw._load_log)
 docs:          ## generate and serve dbt documentation with the lineage graph
 	$(DBT) docs generate && $(DBT) docs serve
 
-dagster:       ## open the Dagster UI at http://localhost:3000 (stop Metabase first if it uses that port)
+dagster:       ## open the Dagster UI at http://localhost:3001 
 	DAGSTER_HOME=$(PWD)/.dagster_home .venv/bin/dagster dev -m orchestration -p 3001
 
 pytest:        ## Python tests for the orchestration code

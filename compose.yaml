@@ -16,5 +16,20 @@ services:
       interval: 5s
       retries: 10
 
+  metabase:
+    image: docker.io/metabase/metabase:latest
+    container_name: goldmine-metabase
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Metabase keeps its own settings in a file database on a volume, separate from the warehouse.
+      MB_DB_FILE: /metabase-data/metabase.db
+    ports:
+      - "3030:3000"
+    volumes:
+      - metabase-data:/metabase-data
+
 volumes:
   pgdata:
+  metabase-data:
