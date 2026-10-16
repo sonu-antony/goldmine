@@ -167,3 +167,34 @@ One entry per concept, added when it is taught.
 - What to do instead: staging keeps all rows. A `unique` test makes it visible (choose `warn` or `error`). The intermediate layer applies the agreed rule. Tell the source owner so it is fixed at the source.
 - Nulls where a link should exist (found: 9 customers without `workspace_id`): staging does not invent values. It keeps the null, a `not_null` test with `warn` reports the count, and downstream models decide (left join keeps them for revenue, active-workspace metric ignores them).
 - Staging is a faithful, cleaned copy of the source that makes problems visible.
+
+## MRR, movements, churn and retention
+- MRR of a subscription = price per seat times seats, counted only while `active` or `non_renewing`. Paused, trial, future and cancelled count as zero. A subscription keeps the price it signed at.
+- Customer MRR in a month is measured at month end, rebuilt from the events log (last event before month end).
+- Movements compare with last month: new, expansion, contraction, churned, paused, resumed, reactivated. A pause is not churn. The bridge closing = opening + new + expansion - contraction - churned + reactivated - paused + resumed is enforced by a test.
+- Logo churn = customers lost / customers at start. Gross revenue churn = (churned + contraction) / opening MRR. NRR = revenue at month end from customers who were paying at month start, divided by opening MRR (can exceed 100 percent). GRR is the same without expansion (cannot exceed 100 percent).
+- Reconciliation: this month's modelled MRR must equal the MRR of the subscriptions as Chargebee holds them now. First thing to check when Finance says the numbers differ.
+
+## Incremental models on arrival time
+- Event time (when something happened) and arrival time (when we received it) differ. Late data has an old event time and a new arrival time.
+- Filtering on event time misses late rows. Filter on arrival time to find the days that changed, then recompute each touched (workspace, day) from all its rows. Prove it by comparing with a full refresh.
+- Plausibility rules belong in the model: a message cannot be sent after it arrived.
+
+## Reconciliation compared with tests
+- dbt tests compare the warehouse with itself, so they cannot see a row that changed in the source without a new `updated_at`. Reconciliation compares source and raw directly (row count, newest `updated_at`, numeric sums).
+- Related invariants catch what a cursor cannot: the events log must agree with the subscription row.
+
+## Dagster
+- An asset is a table the pipeline produces. Each raw table (loader) and each dbt model is an asset, linked by the same asset key, so Dagster knows the order.
+- Asset checks are tests attached to assets (dbt tests become asset checks). A blocking check stops what depends on it.
+- Jobs select assets, schedules run jobs on a cron, a run failure sensor sends the alert. Here: daily pipeline at 05:00 Berlin time, an hourly freshness job, a Slack alert if a webhook is set.
+- Dagster raises the alert for a failed or late sync and stops dbt from running on missing data. dbt freshness stays as a second line of defence.
+
+## Redshift table design
+- Distribution key: spreads a table across nodes. Pick the column the table is joined or grouped by, as long as it spreads evenly (check skew). `ALL` copies a small table to every node so joins never move data. `AUTO` when unsure.
+- Sort key: orders rows on disk so range filters skip blocks. Pick the column filters and joins use.
+- Check with `svv_table_info`: high `skew_rows` means a poor distribution key, high `unsorted` means the sort order decayed.
+- Cost levers: table design first, then pausing development clusters, usage limits on concurrency scaling, and statement timeouts for dashboard users.
+
+## Reverse ETL
+- Hightouch reads a table from the warehouse and writes its columns into a tool such as HubSpot. Build the table in dbt so it is tested and in the lineage graph, key it uniquely, sync as update-only, and run it after dbt succeeds.
