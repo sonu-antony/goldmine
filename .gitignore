@@ -28,3 +28,4 @@ logs/
 # macOS and editors
 .DS_Store
 .idea/
+.dagster_home/

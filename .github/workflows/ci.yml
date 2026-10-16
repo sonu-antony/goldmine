@@ -1,0 +1,103 @@
+name: CI
+
+# Runs on every pull request, and on pushes to main.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-tests:
+    name: Python tests (orchestration wiring, alerts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Parse the dbt project (Dagster reads its manifest)
+        working-directory: goldmine_dbt
+        run: dbt parse
+      - run: python -m pytest -q tests_python
+
+  dbt:
+    name: dbt build against a PostgreSQL service container
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: goldmine
+          POSTGRES_PASSWORD: goldmine
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U goldmine"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: goldmine
+      APP_DB_DSN: postgresql://goldmine:goldmine@localhost:5432/app_db
+      WAREHOUSE_DSN: postgresql://goldmine:goldmine@localhost:5432/warehouse
+      WAREHOUSE_PORT: "5432"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # The two databases the project expects: app_db plays the sources, warehouse plays Redshift.
+      - name: Create databases and source tables
+        run: |
+          psql -h localhost -U goldmine -d postgres -c "CREATE DATABASE app_db" -c "CREATE DATABASE warehouse"
+          for schema in product chargebee hubspot; do
+            psql -h localhost -U goldmine -d app_db -v ON_ERROR_STOP=1 -f sources/${schema}_schema.sql
+          done
+
+      - name: Generate a small, messy source dataset
+        run: python sources/generate.py --workspaces 60 --message-scale 0.05
+
+      - name: Load raw (first run is a full load)
+        run: python -m ingestion.load
+
+      - name: Load raw again, which must change nothing (incremental and idempotent)
+        run: |
+          python -m ingestion.load
+          python -m ingestion.reconcile
+
+      - name: dbt build (models, snapshot and tests)
+        working-directory: goldmine_dbt
+        run: dbt build
+
+      - name: dbt build again, which exercises the incremental model and the snapshot update path
+        working-directory: goldmine_dbt
+        run: dbt build
+
+      - name: Source freshness
+        working-directory: goldmine_dbt
+        run: dbt source freshness
+
+      - name: Generate documentation
+        working-directory: goldmine_dbt
+        run: dbt docs generate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dbt-docs
+          path: |
+            goldmine_dbt/target/index.html
+            goldmine_dbt/target/manifest.json
+            goldmine_dbt/target/catalog.json
